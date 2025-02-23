@@ -1,43 +1,42 @@
-name: Deploy to IONOS Server and Update GitHub
+name: Build and Deploy
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'  # Runs hourly for continuous automation
 
 jobs:
-  deploy:
+  build_and_deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.DEPLOY_TOKEN }}
+          submodules: false  # 🚫 Prevents submodule issues
 
-      - name: Set up Git Configuration
+      - name: Pull Latest Changes to Prevent Conflicts
+        run: |
+          git pull origin main --rebase || echo "No new changes to pull"
+
+      - name: Build Project Files
+        run: |
+          mkdir -p project_files
+          echo "✅ Project built successfully on $(date)" > project_files/BUILD_LOG.txt
+          echo "Test file generated." > project_files/test_file.txt
+
+      - name: Commit and Push Project Files
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Upload files via SFTP to IONOS
-        env:
-          HOST: ${{ secrets.FTP_HOST }}
-          USERNAME: ${{ secrets.FTP_USERNAME }}
-          PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          PORT: ${{ secrets.FTP_PORT }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lftp
-          echo "Uploading files to IONOS server via SFTP..."
-          lftp -u "$USERNAME","$PASSWORD" -p "$PORT" sftp://$HOST <<EOF
-          set sftp:auto-confirm yes
-          set ssl:verify-certificate no
-          mirror -R ./ /inaya
-          bye
-          EOF
-
-      - name: Commit and Push Changes to GitHub
-        env:
-          TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-        run: |
-          git add .
-          git commit -m "Automated deployment: $(date)" || echo "No changes to commit."
-          git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }} HEAD:main
+          git add project_files
+          git commit -m "🚀 Automated build & file upload" || echo "No changes to commit"
+          git pull origin main --rebase
+          git push https://x-access-token:${{ secrets.DEPLOY_TOKEN }}@github.com/${{ github.repository }}.git main --force
