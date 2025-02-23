@@ -4,25 +4,30 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
 
-      - name: Upload files to IONOS via SFTP
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT }}
-          source: "."               # Uploads all files in the repository root
-          target: "/inaya"          # Remote directory (adjust if needed)
-          overwrite: true          # Overwrites existing files on the server
-          strip_components: 1      # Prevents uploading with extra folder layers
-          debug: true              # Enables detailed logs
-          passphrase: ""           # Empty unless using SSH keys (not required here)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Upload files via SFTP
+        env:
+          HOST: ${{ secrets.FTP_HOST }}
+          USERNAME: ${{ secrets.FTP_USERNAME }}
+          PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          PORT: ${{ secrets.FTP_PORT }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lftp
+
+          echo "Uploading files to IONOS server via SFTP..."
+
+          lftp -u "$USERNAME","$PASSWORD" -p "$PORT" sftp://$HOST << EOF
+          set sftp:auto-confirm yes
+          set ssl:verify-certificate no
+          mirror -R ./ /inaya
+          bye
+          EOF
